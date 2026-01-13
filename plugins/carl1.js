@@ -311,7 +311,7 @@ const alive = async (m, sock) => {
           forwardingScore: 999,
           isForwarded: true,
           forwardedNewsletterMessageInfo: {
-            newsletterJid: 'https://whatsapp.com/channel/0029Vak0genJ93wQXq3q6X3h',
+            newsletterJid: 'https://whatsapp.com/channel/0029VbC0ab9DjiOZMtRROs0p',
             newsletterName: "𝖈𝖆𝖗𝖑 𝖜𝖎𝖑𝖑𝖎𝖆𝖒",
             serverMessageId: 143,
           },
