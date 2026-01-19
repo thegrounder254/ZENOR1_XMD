@@ -1,51 +1,48 @@
 import moment from 'moment-timezone';
-import fs from 'fs';
-import os from 'os';
-import pkg, { prepareWAMessageMedia } from '@whiskeysockets/baileys';
-const { generateWAMessageFromContent, proto } = pkg;
 import config from '../../config.cjs';
 
 const alive = async (m, sock) => {
   const prefix = config.PREFIX;
   const mode = config.MODE;
-  const pushName = m.pushName || 'User';
+  const pushName = m.pushName || m.sender?.verifiedName || m.sender?.name || 'User';
 
-  const cmd = m.body.startsWith(prefix)
-    ? m.body.slice(prefix.length).split(' ')[0].toLowerCase()
+  // Extract command from message
+  const body = m.text || m.body || '';
+  const cmd = body.startsWith(prefix)
+    ? body.slice(prefix.length).trim().split(' ')[0].toLowerCase()
     : '';
 
   if (cmd === "menu") {
-    await m.React('🕵'); // React with a loading icon
+    try {
+      await m.React('🕵'); // React with a loading icon
 
-    // Calculate uptime
-    const uptimeSeconds = process.uptime();
-    const days = Math.floor(uptimeSeconds / (24 * 3600));
-    const hours = Math.floor((uptimeSeconds % (24 * 3600)) / 3600);
-    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    const seconds = Math.floor(uptimeSeconds % 60);
+      // Calculate uptime
+      const uptimeSeconds = process.uptime();
+      const days = Math.floor(uptimeSeconds / (24 * 3600));
+      const hours = Math.floor((uptimeSeconds % (24 * 3600)) / 3600);
+      const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+      const seconds = Math.floor(uptimeSeconds % 60);
 
-    // Get real time
-    const realTime = moment().tz("Asia/Karachi").format("HH:mm:ss");
-    const xtime = moment.tz("Asia/Karachi").format("HH:mm:ss");
-    const xdate = moment.tz("Asia/Karachi").format("DD/MM/YYYY");
-    const time2 = moment().tz("Asia/Karachi").format("HH:mm:ss");
+      // Get real time
+      const time2 = moment().tz("Asia/Karachi").format("HH:mm:ss");
+      const xdate = moment.tz("Asia/Karachi").format("DD/MM/YYYY");
 
-    let pushwish = "";
-    if (time2 < "05:00:00") {
-      pushwish = "Good Morning 🌄";
-    } else if (time2 < "11:00:00") {
-      pushwish = "Good Morning 🌄";
-    } else if (time2 < "15:00:00") {
-      pushwish = "Good Afternoon 🌅";
-    } else if (time2 < "18:00:00") {
-      pushwish = "Good Evening 🌃";
-    } else if (time2 < "19:00:00") {
-      pushwish = "Good Evening 🌃";
-    } else {
-      pushwish = "Good Night 🌌";
-    }
+      let pushwish = "";
+      const hour = parseInt(time2.split(':')[0]);
+      if (hour < 5) {
+        pushwish = "Good Night 🌌";
+      } else if (hour < 12) {
+        pushwish = "Good Morning 🌄";
+      } else if (hour < 15) {
+        pushwish = "Good Afternoon 🌅";
+      } else if (hour < 18) {
+        pushwish = "Good Evening 🌃";
+      } else {
+        pushwish = "Good Night 🌌";
+      }
 
-    const aliveMessage = `
+      const aliveMessage = `
+${pushwish} ${pushName}
 ╭┈───────────────•
 │  ◦ 𝖕𝖗𝖊𝖋𝖎𝖝: ${prefix}
 │  ◦ 𝔪𝔬𝔡𝔢: ${mode}
@@ -297,28 +294,36 @@ const alive = async (m, sock) => {
 
     await m.React('🔮'); // React with a success icon
 
-    // Define the menu image (you can replace the URL with your own image)
-    const menuImage = { url: 'https://files.catbox.moe/ptr27z.jpg' };
+      // Define the menu image
+      const menuImage = {
+        url: 'https://files.catbox.moe/ptr27z.jpg'
+      };
 
-    // Send the response with image and context info
-    await sock.sendMessage(
-      m.from,
-      {
-        image: menuImage,
-        caption: aliveMessage,
-        contextInfo: {
-          mentionedJid: [m.sender],
-          forwardingScore: 999,
-          isForwarded: true,
-          forwardedNewsletterMessageInfo: {
-            newsletterJid: 'https://whatsapp.com/channel/0029VbC0ab9DjiOZMtRROs0p',
-            newsletterName: "𝖈𝖆𝖗𝖑 𝖜𝖎𝖑𝖑𝖎𝖆𝖒",
-            serverMessageId: 143,
-          },
+      // Send the response with image
+      await sock.sendMessage(
+        m.from,
+        {
+          image: menuImage,
+          caption: aliveMessage,
+          contextInfo: {
+            mentionedJid: [m.sender],
+            externalAdReply: {
+              title: `𝖈𝖆𝖗𝖑 𝖜𝖎𝖑𝖑𝖎𝖆𝖒`,
+              body: `Prefix: ${prefix} | Mode: ${mode}`,
+              thumbnailUrl: menuImage.url,
+              sourceUrl: 'https://whatsapp.com/channel/0029VbC0ab9DjiOZMtRROs0p',
+              mediaType: 1,
+              renderLargerThumbnail: true
+            }
+          }
         },
-      },
-      { quoted: m }
-    );
+        { quoted: m }
+      );
+    } catch (error) {
+      console.error('Error in menu command:', error);
+      await m.React('❌');
+      await sock.sendMessage(m.from, { text: '❌ Error displaying menu. Please try again.' }, { quoted: m });
+    }
   }
 };
 
