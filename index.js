@@ -66,7 +66,7 @@ async function loadGiftedSession() {
         console.log("Detected Gifted session format (GZIP compressed)");
         
         // Extract Base64 part (everything after "Gifted~")
-        const compressedBase64 = config.SESSION_ID.substring("Gifted~".length);
+        const compressedBase64 = config.SESSION_ID.substring("Zenor~".length);
         console.log("Compressed Base64 length:", compressedBase64.length);
         
         try {
