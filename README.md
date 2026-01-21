@@ -56,9 +56,9 @@
     </tr>
   </table>
 </div>
-#### SUPPORT THE PROJECT 
 
-**JOIN OUR SUPPORT GROUP**
+## SUPPORT THE PROJECT 
+
 
 <a href="https://chat.whatsapp.com/K8IfcWXLs0S0cpMTN1riyN" target="_blank">
     <img alt="CLICK HERE" src="https://img.shields.io/badge/ JOIN NOW 🚀 -25D366?style=for-the-badge&logo=whatsapp&logoColor=white" />
@@ -73,7 +73,10 @@
 [![Chat on WhatsApp](https://img.shields.io/badge/WhatsApp-Chat-green?logo=whatsapp)](https://wa.me/+254729980068)
 <br>
 
+
+
 [![Instagram](https://img.shields.io/badge/Instagram-Profile-orange?style=flat-square&logo=Instagram)](https://www.instagram.com/quantum_.vybe) 
+
 [![Zenor tech](https://readme-typing-svg.demolab.com?font=Anton&size=30&pause=998&color=F51FFF&background=F7F2F20A&vCenter=true&random=false&width=465&lines=thank+you%F0%9F%91%8B!;for+using+ZENOR+XMD;🙏;🙏+✍🏾;🥰)](https://github.com/thegrounder254)
 
 Special thanks to bro[Carl William](https://github.com/carl24tech) 
