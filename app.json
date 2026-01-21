@@ -1,13 +1,13 @@
 {
-  "name": "CARL TECH",
-  "description": "Buddy-XTR by carl william.",
+  "name": "ZENOR TECH",
+  "description": "Zenor_XMD by carl and Trevor.",
   "logo": "https://files.catbox.moe/waszph.jpg",
   "keywords": ["CARL-TECH", "whatsapp-bot", "whatsapp-md-bot"],
-  "repository": "https://github.com/carl24tech/Buddy-XTR",
+  "repository": "https://github.com/thegrounder254/Zenor_XMD",
   "stack": "container",
   "env": { 
     "SESSION_ID": {
-      "description": "Ensure your session Id starts with Buddy;;;",
+      "description": "Ensure your session Id starts with Carl;;;",
       "required": true,
       "value": ""
     },
@@ -24,7 +24,7 @@
     "OWNER_NAME": {
       "description": "Your name as the bot owner",
       "required": false,
-      "value": "𝖂𝖎𝖑𝖑𝖎𝖆𝖒"
+      "value": "Trevor"
     },
     "OWNER_NUMBER": {
       "description": "Your WhatsApp number",
