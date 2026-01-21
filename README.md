@@ -9,7 +9,7 @@
  
 
    
-   <a href="https://github.com/thegrounder254/ZENOR1_XMD/fork"><img title="FORK-REPO" src="https://img.shields.io/badge/FORK-REPO-h?color=magenta&style=for-the-badge&logo=audi" width="297" height="40.45"/></a></p>
+   <a href="https://github.com/thegrounder254/ZENOR_XMD/fork"><img title="FORK-REPO" src="https://img.shields.io/badge/FORK-REPO-h?color=magenta&style=for-the-badge&logo=audi" width="297" height="40.45"/></a></p>
 
 
 
@@ -69,12 +69,13 @@
 2. **FOLLOW OUR WHATSAPP CHANNEL**
 
 - <a href="https://whatsapp.com/channel/0029VaiOh8O60eBXckdPQy0S" target="_blank">
-    <img alt="CLICK HERE " src="https://img.shields.io/badge/ FOLLOW NOW  -25D366?style=for-the-badge&logo=whatsapp&logoColor=white" />
+    
+<img alt="CLICK HERE " src="https://img.shields.io/badge/ FOLLOW NOW  -25D366?style=for-the-badge&logo=whatsapp&logoColor=white" />
   </a>
    
 [![Chat on WhatsApp](https://img.shields.io/badge/WhatsApp-Chat-green?logo=whatsapp)](https://wa.me/+254729980068)
 <br>
 
 [![Instagram](https://img.shields.io/badge/Instagram-Profile-orange?style=flat-square&logo=Instagram)](https://www.instagram.com/quantum_.vybe) 
-[![matrix tech](https://readme-typing-svg.demolab.com?font=Anton&size=30&pause=998&color=F51FFF&background=F7F2F20A&vCenter=true&random=false&width=465&lines=thank+you%F0%9F%91%8B!;for+using+MATRIX+XMD;🙏;🙏+✍🏾;🥰)](https://github.com/Trevley)
--*Special thanks to bro[Ibrahim Adams](https://github.com/ibrahimaitech/) 
+[![Zenor tech](https://readme-typing-svg.demolab.com?font=Anton&size=30&pause=998&color=F51FFF&background=F7F2F20A&vCenter=true&random=false&width=465&lines=thank+you%F0%9F%91%8B!;for+using+ZENOR+XMD;🙏;🙏+✍🏾;🥰)](https://github.com/thegrounder254)
+Special thanks to bro[Carl William](https://github.com/carl24tech) 
