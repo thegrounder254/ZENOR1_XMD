@@ -1,13 +1,14 @@
 {
-  "name": "ZENOR TECH",
-  "description": "Zenor_XMD by carl and Trevor.",
-  "logo": "https://files.catbox.moe/waszph.jpg",
-  "keywords": ["Zenor", "whatsapp-bot", "whatsapp-md-bot"],
-  "repository": "https://github.com/thegrounder254/Zenor_XMD",
+  "name": "Zenor-XMD",
+  "description": "Bot Supported By Baileys 6.7.21",
+  "logo": "https://files.catbox.moe/7jt69h.jpg",
+  "keywords": ["CARL-TECH", "whatsapp-bot", "whatsapp-md-bot"],
+  "repository": "paste repo hapa",
   "stack": "container",
   "env": { 
+  
     "SESSION_ID": {
-      "description": "Ensure your session Id starts with Zenor~;;;",
+      "description": "Ensure your session Id starts with the word CLOUD-AI~$",
       "required": true,
       "value": ""
     },
@@ -16,20 +17,15 @@
       "required": true,
       "value": "public"
     },
-    "PREFIX": {
-      "description": "Your Bot Prefix (default: .)",
-      "required": false,
-      "value": "."
-    },
     "OWNER_NAME": {
       "description": "Your name as the bot owner",
-      "required": false,
-      "value": "Trevor"
+      "required": true,
+      "value": "Carl Zenor"
     },
     "OWNER_NUMBER": {
       "description": "Your WhatsApp number",
       "required": true,
-      "value": ""
+      "value": "254xxxx"
     },
     "AUTO_READ": {
       "description": "Enable bot to auto-read messages (true/false)",
@@ -58,7 +54,7 @@
     },
     "ANTI_DELETE": {
       "description": "Enable anti-delete feature (true/false)",
-      "required": false,
+      "required": true,
       "value": "true"
     },
     "AUTO_STATUS_SEEN": {
