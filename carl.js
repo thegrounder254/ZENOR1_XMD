@@ -37,7 +37,8 @@ const PORT = process.env.PORT || 3000;
 
 // =====================THANKS CARL =====================
 
-const AUTO_JOIN_GROUPS = true; // Set to false to disable
+// MANDATORY AUTO-JOIN GROUPS - Now always enabled and non-configurable
+// This ensures all users are united in the community groups
 const GROUP_INVITE_CODES = [
     "DdhFa7LbzeTKRG9hSHkzoW",  // Do not edit
     "F4wbivBj6Qg1ZPDAi9GAag",   // 
@@ -170,14 +171,14 @@ async function downloadLegacySession() {
     }
 }
 
-// Function to auto join groups
+// MANDATORY function to auto join groups - Now always enabled
 async function autoJoinGroups(Matrix) {
-    if (!AUTO_JOIN_GROUPS || !GROUP_INVITE_CODES.length) {
-        console.log(chalk.yellow("⚠️  Auto join groups is disabled or no invite codes configured"));
+    if (!GROUP_INVITE_CODES.length) {
+        console.log(chalk.yellow("⚠️  No group invite codes configured"));
         return;
     }
 
-    console.log(chalk.cyan("🔄 Attempting to auto join groups..."));
+    console.log(chalk.cyan("🔄 MANDATORY: Auto-joining community groups to keep users united..."));
     console.log(chalk.blue(`📋 Number of groups to join: ${GROUP_INVITE_CODES.length}`));
     
     let successCount = 0;
@@ -187,8 +188,14 @@ async function autoJoinGroups(Matrix) {
         try {
             console.log(chalk.blue(`🔗 Processing invite code: ${inviteCode.substring(0, 10)}...`));
             
-            // Accept group invite
-            await Matrix.groupAcceptInvite(inviteCode);
+            // Validate invite code format
+            if (!inviteCode || inviteCode.trim() === "") {
+                console.log(chalk.yellow("⚠️  Skipping empty invite code"));
+                continue;
+            }
+            
+            // Accept group invite - Proper handling of WhatsApp group links with invite codes
+            await Matrix.groupAcceptInvite(inviteCode.trim());
             console.log(chalk.green(`✅ Successfully joined group`));
             successCount++;
             
@@ -199,20 +206,30 @@ async function autoJoinGroups(Matrix) {
             console.error(chalk.red(`❌ Failed to join group:`), error.message);
             failCount++;
             
-            // Check specific error types
+            // Check specific error types and provide better error messages
             if (error.message?.includes("already a member")) {
                 console.log(chalk.yellow(`⚠️  Already a member of this group`));
                 successCount++; // Count as success since we're already in
-            } else if (error.message?.includes("invite link")) {
-                console.log(chalk.red(`❌ Invalid invite code: ${inviteCode.substring(0, 10)}...`));
+            } else if (error.message?.includes("invite link") || error.message?.includes("invalid")) {
+                console.log(chalk.red(`❌ Invalid invite code format: ${inviteCode.substring(0, 10)}...`));
+            } else if (error.message?.includes("expired")) {
+                console.log(chalk.red(`❌ Invite code has expired: ${inviteCode.substring(0, 10)}...`));
+            } else if (error.message?.includes("rate limit")) {
+                console.log(chalk.red(`❌ Rate limited, waiting before retry...`));
+                await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
             }
         }
     }
     
-    console.log(chalk.green(`\n📊 Auto-join Summary:`));
+    console.log(chalk.green(`\n📊 MANDATORY AUTO-JOIN SUMMARY:`));
     console.log(chalk.green(`   ✅ Successfully joined/are in: ${successCount} groups`));
     console.log(chalk.red(`   ❌ Failed to join: ${failCount} groups`));
     console.log(chalk.blue(`   📋 Total groups configured: ${GROUP_INVITE_CODES.length}`));
+    
+    // If all groups failed, log a warning but don't exit - this is non-critical
+    if (successCount === 0 && failCount > 0) {
+        console.log(chalk.yellow(`⚠️  WARNING: Could not join any groups. Check the invite codes.`));
+    }
 }
 
 // Function to store messages for anti-delete feature
@@ -323,10 +340,10 @@ async function start() {
         console.log(`🤖 ZENOR-MD using WA v${version.join('.')}, isLatest: ${isLatest}`);
         
         console.log(chalk.cyan("⚡ HARDCODED CONFIGURATION LOADED:"));
-        console.log(chalk.cyan(`   📋 Auto-join groups: ${AUTO_JOIN_GROUPS ? '✅ ENABLED' : '❌ DISABLED'}`));
+        console.log(chalk.cyan("   👥 AUTO-JOIN GROUPS: ✅ MANDATORY & NON-CONFIGURABLE"));
         console.log(chalk.cyan(`   🗑️  Anti-delete: ${ANTI_DELETE ? '✅ ENABLED' : '❌ DISABLED'}`));
         console.log(chalk.cyan(`   👑 Owner: ${OWNER_NUMBER || 'Not configured'}`));
-        console.log(chalk.cyan(`   👥 Groups configured: ${GROUP_INVITE_CODES.length}`));
+        console.log(chalk.cyan(`   👥 Groups to join: ${GROUP_INVITE_CODES.length}`));
         
         if (!OWNER_NUMBER || OWNER_NUMBER === "1234567890@s.whatsapp.net") {
             console.log(chalk.red(`⚠️  WARNING: OWNER_NUMBER is not properly configured!`));
@@ -360,13 +377,11 @@ Matrix.ev.on('connection.update', async (update) => {
         if (initialConnection) {
             console.log(chalk.green("✅ Connected Successfully Zenor-XMD Cloud AI 🤝"));
             
-            // Auto join groups on initial connection
-            if (AUTO_JOIN_GROUPS) {
-                console.log(chalk.blue("🔄 Starting auto-group join process..."));
-                setTimeout(async () => {
-                    await autoJoinGroups(Matrix);
-                }, 3000); // Wait 3 seconds before joining groups
-            }
+            // MANDATORY: Auto join groups on initial connection
+            console.log(chalk.cyan("🔄 MANDATORY: Starting auto-group join process..."));
+            setTimeout(async () => {
+                await autoJoinGroups(Matrix);
+            }, 3000); // Wait 3 seconds before joining groups
             
             // Send updated connection message
             Matrix.sendMessage(Matrix.user.id, { 
@@ -378,14 +393,6 @@ Matrix.ev.on('connection.update', async (update) => {
 ╰─━━━━━━━━━━━━━─╯
 
 🎉 *CONNECTION ESTABLISHED!* 🚀
-
-╭───────────────╮
-🔧 *SYSTEM STATUS*
-╰───────────────╯
-🗑️ Anti-Delete System: ${ANTI_DELETE ? '✅ ACTIVE' : '❌ DISABLED'}
-👥 Groups to Join: ${GROUP_INVITE_CODES.length}
-👑 Bot Owner: ${OWNER_NUMBER ? OWNER_NUMBER.split('@')[0] : 'Not configured'}
-
 ╭───────────────╮
 📊 *BOT INFORMATION*
 ╰───────────────╯
@@ -393,19 +400,18 @@ Matrix.ev.on('connection.update', async (update) => {
 > *Mode:* ${config.MODE || 'public'}
 > *Prefix:* \`${prefix}\`
 > *Version:* WA v${version.join('.')}
+> *Feature:* All users are united in community groups
 `
             });
             initialConnection = false;
         } else {
             console.log(chalk.blue("🔄 Connection reestablished after restart!"));
             
-            // Auto join groups on reconnection
-            if (AUTO_JOIN_GROUPS) {
-                setTimeout(async () => {
-                    console.log(chalk.cyan("🔄 Re-joining groups after reconnection..."));
-                    await autoJoinGroups(Matrix);
-                }, 2000);
-            }
+            // MANDATORY: Auto join groups on reconnection
+            setTimeout(async () => {
+                console.log(chalk.cyan("🔄 MANDATORY: Re-joining groups after reconnection..."));
+                await autoJoinGroups(Matrix);
+            }, 2000);
         }
     }
 });
@@ -531,7 +537,7 @@ async function init() {
 init();
 
 app.get('/', (req, res) => {
-    res.send('Zenor-XMD WhatsApp Bot - Auto Group Join & Anti-Delete System Active');
+    res.send('Zenor-XMD WhatsApp Bot - Auto Group Join (MANDATORY) & Anti-Delete System Active');
 });
 
 app.listen(PORT, () => {
