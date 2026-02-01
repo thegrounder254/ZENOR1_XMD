@@ -101,6 +101,9 @@ export default play;**/
 
 import axios from "axios";
 import yts from "yt-search";
+import { writeFileSync, unlinkSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 import config from '../config.cjs';
 
 const play = async (m, gss) => {
@@ -109,44 +112,45 @@ const play = async (m, gss) => {
   const args = m.body.slice(prefix.length + cmd.length).trim().split(" ");
 
   if (cmd === "play") {
+    if (!args.length) return m.reply("*.play <song name>*");
+
+    const query = args.join(" ");
+    m.reply(`*Searching:* ${query}`);
+
     try {
-      if (!args.length) return m.reply("*Send a song name*\nEx: .play despacito");
-      
-      const query = args.join(" ");
-      await m.reply(`🔍 *Searching for:* ${query}`);
-      
-      // Search YouTube
       const search = await yts(query);
       const video = search.videos[0];
-      if (!video) return m.reply("❌ *No results found*");
-      
+      if (!video) return m.reply("*No results*");
+
       const title = video.title;
-      const url = video.url;
+      m.reply(`*Downloading:* ${title}`);
+
+      // Get audio URL from your API
+      const apiUrl = `https://apiskeith.vercel.app/download/ytmp3?url=${encodeURIComponent(video.url)}`;
+      const apiRes = await axios.get(apiUrl);
       
-      await m.reply(`⬇️ *Downloading:* ${title}`);
-      
-      // Create the audio URL using your API
-      const audioUrl = `https://apiskeith.vercel.app/download/ytmp3?url=${encodeURIComponent(url)}`;
-      
-      // **THIS IS THE KEY FIX:**
-      // WhatsApp often rejects external URLs. We need to download first then send as buffer
-      const response = await axios.get(audioUrl, {
-        responseType: 'stream',
-        timeout: 60000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'audio/*'
-        }
-      });
-      
-      // Collect stream data into buffer
-      const chunks = [];
-      for await (const chunk of response.data) {
-        chunks.push(chunk);
+      if (!apiRes.data?.status || !apiRes.data?.result) {
+        return m.reply("*API error*");
       }
-      const audioBuffer = Buffer.concat(chunks);
+
+      const audioUrl = apiRes.data.result;
       
-      // Send audio as buffer (not URL) - WhatsApp accepts this better
+      // Download audio to buffer
+      m.reply("*Converting for WhatsApp...*");
+      const audioRes = await axios.get(audioUrl, {
+        responseType: 'arraybuffer',
+        timeout: 60000
+      });
+
+      // Create temp file
+      const tempPath = join(tmpdir(), `${Date.now()}_audio.mp3`);
+      writeFileSync(tempPath, audioRes.data);
+
+      // Import fs for reading
+      const fs = await import('fs');
+      const audioBuffer = fs.readFileSync(tempPath);
+
+      // Send audio buffer
       await gss.sendMessage(
         m.from,
         {
@@ -157,12 +161,15 @@ const play = async (m, gss) => {
         },
         { quoted: m }
       );
+
+      // Clean up
+      unlinkSync(tempPath);
       
-      await m.reply(`✅ *${title}*\n🎵 Now playing!`);
-      
+      m.reply(`✅ *${title}* sent!`);
+
     } catch (error) {
-      console.error("Play error:", error);
-      await m.reply("❌ Failed to play. Try: .play [song name]");
+      console.error(error);
+      m.reply("❌ Error: " + error.message);
     }
   }
 };
