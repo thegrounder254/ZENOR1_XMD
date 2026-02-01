@@ -101,9 +101,6 @@ export default play;**/
 
 import axios from "axios";
 import yts from "yt-search";
-import { writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
 import config from '../config.cjs';
 
 const play = async (m, gss) => {
@@ -112,64 +109,77 @@ const play = async (m, gss) => {
   const args = m.body.slice(prefix.length + cmd.length).trim().split(" ");
 
   if (cmd === "play") {
-    if (!args.length) return m.reply("*.play <song name>*");
-
-    const query = args.join(" ");
-    m.reply(`*Searching:* ${query}`);
-
     try {
+      if (!args.length) return m.reply("*Example:* .play shape of you");
+      
+      const query = args.join(" ");
+      m.reply(`*Searching:* ${query}`);
+      
       const search = await yts(query);
       const video = search.videos[0];
-      if (!video) return m.reply("*No results*");
-
+      if (!video) return m.reply("*No song found*");
+      
       const title = video.title;
-      m.reply(`*Downloading:* ${title}`);
-
-      // Get audio URL from your API
-      const apiUrl = `https://apiskeith.vercel.app/download/ytmp3?url=${encodeURIComponent(video.url)}`;
-      const apiRes = await axios.get(apiUrl);
+      const videoId = video.videoId;
       
-      if (!apiRes.data?.status || !apiRes.data?.result) {
-        return m.reply("*API error*");
+      m.reply(`*Processing:* ${title}`);
+      
+      // FIXED: Use the correct URL format that your API expects
+      // Your API might need the full YouTube URL
+      const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const apiUrl = `https://apiskeith.vercel.app/download/audio?url=${encodeURIComponent(youtubeUrl)}`;
+      
+      console.log("API Request URL:", apiUrl);
+      
+      // Get the audio stream URL
+      const response = await axios.get(apiUrl, { timeout: 30000 });
+      console.log("API Response:", JSON.stringify(response.data, null, 2));
+      
+      if (!response.data?.status || !response.data?.result) {
+        return m.reply("*❌ API returned invalid data*");
       }
-
-      const audioUrl = apiRes.data.result;
       
-      // Download audio to buffer
-      m.reply("*Converting for WhatsApp...*");
-      const audioRes = await axios.get(audioUrl, {
-        responseType: 'arraybuffer',
-        timeout: 60000
-      });
-
-      // Create temp file
-      const tempPath = join(tmpdir(), `${Date.now()}_audio.mp3`);
-      writeFileSync(tempPath, audioRes.data);
-
-      // Import fs for reading
-      const fs = await import('fs');
-      const audioBuffer = fs.readFileSync(tempPath);
-
-      // Send audio buffer
+      const audioStreamUrl = response.data.result;
+      console.log("Audio Stream URL:", audioStreamUrl);
+      
+      // Validate the stream URL
+      if (!audioStreamUrl.startsWith('http')) {
+        return m.reply("*❌ Invalid audio URL received*");
+      }
+      
+      // Test if the stream URL is accessible
+      try {
+        await axios.head(audioStreamUrl, { timeout: 10000 });
+      } catch (testError) {
+        console.log("Stream URL test failed:", testError.message);
+        return m.reply("*❌ Audio stream is not accessible*");
+      }
+      
+      // Send the audio - SIMPLIFIED version
       await gss.sendMessage(
         m.from,
         {
-          audio: audioBuffer,
-          mimetype: "audio/mpeg",
-          fileName: `${title.substring(0, 30)}.mp3`,
+          audio: { url: audioStreamUrl },
+          // Remove mimetype and fileName to let WhatsApp detect automatically
           ptt: false,
         },
         { quoted: m }
       );
-
-      // Clean up
-      unlinkSync(tempPath);
       
-      m.reply(`✅ *${title}* sent!`);
-
+      m.reply(`✅ *${title}* sent successfully!`);
+      
     } catch (error) {
-      console.error(error);
-      m.reply("❌ Error: " + error.message);
+      console.error("Full error:", error);
+      
+      if (error.response) {
+        console.log("Response status:", error.response.status);
+        console.log("Response data:", error.response.data);
+        m.reply(`*❌ API Error ${error.response.status}:* ${JSON.stringify(error.response.data)}`);
+      } else if (error.code === 'ECONNABORTED') {
+        m.reply("*❌ Timeout. Try a shorter song.*");
+      } else {
+        m.reply(`*❌ Error:* ${error.message}`);
+      }
     }
   }
 };
