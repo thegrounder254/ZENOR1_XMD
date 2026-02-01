@@ -99,7 +99,7 @@ export default play;**/
 
 
 
-// app/commands/play.js
+// app/plugins/play.js (ESM)
 import axios from "axios";
 import yts from "yt-search";
 import config from "../config.cjs";
@@ -107,14 +107,26 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { spawn } from "child_process";
-import ffmpegPath from "ffmpeg-static";
+
+async function getFfmpegBin() {
+  // Try ffmpeg-static first (best on Heroku)
+  try {
+    const mod = await import("ffmpeg-static");
+    const ffmpegPath = mod.default || mod;
+    if (ffmpegPath) return ffmpegPath;
+  } catch (_) {
+    // ignore
+  }
+  // Fallback to system ffmpeg if available (if you use buildpack)
+  return "ffmpeg";
+}
 
 async function downloadToFile(url, outPath) {
   const res = await axios.get(url, {
     responseType: "stream",
     timeout: 60000,
     maxRedirects: 5,
-    headers: { "User-Agent": "Mozilla/5.0" }
+    headers: { "User-Agent": "Mozilla/5.0" },
   });
 
   await new Promise((resolve, reject) => {
@@ -125,7 +137,9 @@ async function downloadToFile(url, outPath) {
   });
 }
 
-function convertToOpus(inputPath, outputPath) {
+async function convertToOpus(inputPath, outputPath) {
+  const ffmpegBin = await getFfmpegBin();
+
   return new Promise((resolve, reject) => {
     const args = [
       "-y",
@@ -135,16 +149,17 @@ function convertToOpus(inputPath, outputPath) {
       "-ar", "48000",
       "-b:a", "128k",
       "-c:a", "libopus",
-      outputPath
+      outputPath,
     ];
 
-    const ff = spawn(ffmpegPath, args);
+    const ff = spawn(ffmpegBin, args);
     let err = "";
 
-    ff.stderr.on("data", d => (err += d.toString()));
-    ff.on("close", code => {
-      if (code === 0) resolve();
-      else reject(new Error("FFmpeg failed: " + err.slice(-2000)));
+    ff.stderr.on("data", (d) => (err += d.toString()));
+    ff.on("error", (e) => reject(e));
+    ff.on("close", (code) => {
+      if (code === 0) return resolve();
+      reject(new Error("ffmpeg failed: " + err.slice(-2000)));
     });
   });
 }
@@ -166,9 +181,7 @@ const play = async (m, gss) => {
   let inputFile, outputFile;
 
   try {
-    if (!args.length) {
-      return m.reply("*Example:* .play shape of you");
-    }
+    if (!args.length) return m.reply("*Example:* .play shape of you");
 
     const query = args.join(" ");
     await m.reply(`🔍 *Searching:* ${query}`);
@@ -180,7 +193,6 @@ const play = async (m, gss) => {
     const youtubeUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
     await m.reply(`🎧 *Processing:* ${video.title}`);
 
-    // Your API
     const apiUrl = `https://apiskeith.vercel.app/download/audio?url=${encodeURIComponent(youtubeUrl)}`;
     const apiRes = await axios.get(apiUrl, { timeout: 30000 });
 
@@ -189,40 +201,50 @@ const play = async (m, gss) => {
     }
 
     const audioUrl = apiRes.data.result;
+    if (typeof audioUrl !== "string" || !audioUrl.startsWith("http")) {
+      return m.reply("❌ *Invalid audio URL*");
+    }
 
     const tmp = os.tmpdir();
     const id = Date.now();
     inputFile = path.join(tmp, `play_${id}.input`);
     outputFile = path.join(tmp, `play_${id}.ogg`);
 
-    // Download + convert
     await downloadToFile(audioUrl, inputFile);
     await convertToOpus(inputFile, outputFile);
 
-    // Size safety (~18MB)
-    if (fs.statSync(outputFile).size > 18 * 1024 * 1024) {
+    const size = fs.statSync(outputFile).size;
+    if (size > 18 * 1024 * 1024) {
       return m.reply("❌ *Audio too large. Try a shorter song*");
     }
 
-    // 🎙️ SEND AS VOICE NOTE
+    // 🎙️ send as voice note
     await gss.sendMessage(
       m.from,
       {
         audio: fs.readFileSync(outputFile),
         mimetype: "audio/ogg; codecs=opus",
-        ptt: true
+        ptt: true,
       },
       { quoted: m }
     );
 
     await m.reply(`🎙️ *Voice note sent:* ${video.title}`);
-
   } catch (err) {
     console.error("PLAY ERROR:", err?.response?.data || err);
-    await m.reply("❌ *Failed to send audio*");
+
+    // Give a helpful message when ffmpeg is missing
+    const msg = String(err?.message || "");
+    if (msg.includes("spawn ffmpeg") || msg.includes("ENOENT")) {
+      return m.reply(
+        "❌ *ffmpeg not found.* Install `ffmpeg-static` in dependencies OR add an ffmpeg buildpack."
+      );
+    }
+
+    return m.reply("❌ *Failed to send audio*");
   } finally {
-    try { if (inputFile) fs.unlinkSync(inputFile); } catch {}
-    try { if (outputFile) fs.unlinkSync(outputFile); } catch {}
+    try { if (inputFile && fs.existsSync(inputFile)) fs.unlinkSync(inputFile); } catch {}
+    try { if (outputFile && fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch {}
   }
 };
 
