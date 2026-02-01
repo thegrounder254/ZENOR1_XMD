@@ -7,6 +7,9 @@ import {
     fetchLatestBaileysVersion,
     DisconnectReason,
     useMultiFileAuthState,
+    downloadMediaMessage,
+    MessageUpsertType,
+    proto
 } from '@whiskeysockets/baileys';
 import { Handler, Callupdate, GroupUpdate } from './data/index.js';
 import express from 'express';
@@ -33,6 +36,22 @@ let useQR = false;
 let initialConnection = true;
 const PORT = process.env.PORT || 3000;
 
+// =====================THANKS CARL =====================
+
+const AUTO_JOIN_GROUPS = true; // Set to false to disable
+const GROUP_INVITE_CODES = [
+    "DdhFa7LbzeTKRG9hSHkzoW",  // Do not edit
+    "F4wbivBj6Qg1ZPDAi9GAag",   // 
+    "Dn0uPVabXugIro9BgmGilM"    // 
+];
+
+// Anti-delete feature configuration - Get from config or environment
+const ANTI_DELETE = config.ANTI_DELETE !== undefined ? config.ANTI_DELETE : true;
+const ANTI_DELETE_NOTIFY = config.ANTI_DELETE_NOTIFY !== undefined ? config.ANTI_DELETE_NOTIFY : true;
+const OWNER_NUMBER = config.OWNER_NUMBER || process.env.OWNER_NUMBER || "1234567890@s.whatsapp.net";
+// 
+// ===================== ZENOR-XMD =====================
+
 const MAIN_LOGGER = pino({
     timestamp: () => `,"time":"${new Date().toJSON()}"`
 });
@@ -40,6 +59,9 @@ const logger = MAIN_LOGGER.child({});
 logger.level = "trace";
 
 const msgRetryCounterCache = new NodeCache();
+
+// Store deleted messages
+const deletedMessages = new Map();
 
 const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
@@ -52,62 +74,62 @@ if (!fs.existsSync(sessionDir)) {
 }
 
 async function loadGiftedSession() {
-    console.log("ðŸ” Checking SESSION_ID format...");
+    console.log("🔍 Checking SESSION_ID format...");
     
     if (!config.SESSION_ID) {
-        console.error('âŒ No SESSION_ID provided in config!');
+        console.error('❌ No SESSION_ID provided in config!');
         return false;
     }
     
     // Check if session starts with "Gifted~"
     if (config.SESSION_ID.startsWith("Zenor~")) {
-        console.log("âœ… Detected Gifted session format (GZIP compressed)");
+        console.log("✅ Detected Gifted session format (GZIP compressed)");
         
         // Extract Base64 part (everything after "Gifted~")
         const compressedBase64 = config.SESSION_ID.substring("Zenor~".length);
-        console.log("ðŸ“ Compressed Base64 length:", compressedBase64.length);
+        console.log("📋 Compressed Base64 length:", compressedBase64.length);
         
         try {
             // Decode Base64
             const compressedBuffer = Buffer.from(compressedBase64, 'base64');
-            console.log("ðŸ”¤ Decoded buffer length:", compressedBuffer.length);
+            console.log("🔄 Decoded buffer length:", compressedBuffer.length);
             
             // Check if it's GZIP compressed
             if (compressedBuffer[0] === 0x1f && compressedBuffer[1] === 0x8b) {
-                console.log("âœ… Detected GZIP compression");
+                console.log("✅ Detected GZIP compression");
                 
                 // Decompress using GZIP
                 const gunzip = promisify(zlib.gunzip);
                 const decompressedBuffer = await gunzip(compressedBuffer);
                 const sessionData = decompressedBuffer.toString('utf-8');
                 
-                console.log("ðŸ“„ Decompressed session data (first 200 chars):");
+                console.log("📄 Decompressed session data (first 200 chars):");
                 console.log(sessionData.substring(0, 200));
                 
                 // Try to parse as JSON
                 try {
                     const parsedSession = JSON.parse(sessionData);
-                    console.log("âœ… Successfully parsed JSON session");
-                    console.log("ðŸ“Š Session keys:", Object.keys(parsedSession));
+                    console.log("✅ Successfully parsed JSON session");
+                    console.log("📊 Session keys:", Object.keys(parsedSession));
                 } catch (parseError) {
-                    console.log("âš ï¸  Session data is not JSON, saving as raw string");
+                    console.log("⚠️  Session data is not JSON, saving as raw string");
                 }
                 
                 // Save session to file
                 await fs.promises.writeFile(credsPath, sessionData);
-                console.log("ðŸ’¾ Session saved to file successfully");
+                console.log("💾 Session saved to file successfully");
                 return true;
             } else {
-                console.log("âŒ Not a valid GZIP file (missing magic bytes)");
+                console.log("❌ Not a valid GZIP file (missing magic bytes)");
                 return false;
             }
         } catch (error) {
-            console.error('âŒ Failed to process Gifted session:', error.message);
-            console.error('ðŸ” Error details:', error);
+            console.error('❌ Failed to process Gifted session:', error.message);
+            console.error('🔍 Error details:', error);
             return false;
         }
     } else {
-        console.log("âš ï¸  SESSION_ID does not start with Gifted~");
+        console.log("⚠️  SESSION_ID does not start with Gifted~");
         return false;
     }
 }
@@ -116,21 +138,21 @@ async function downloadLegacySession() {
     console.log("Debugging SESSION_ID:", config.SESSION_ID);
 
     if (!config.SESSION_ID) {
-        console.error('âŒ Please add your session to SESSION_ID env !!');
+        console.error('❌ Please add your session to SESSION_ID env !!');
         return false;
     }
 
     const sessdata = config.SESSION_ID.split("Zenor~")[1];
 
     if (!sessdata || !sessdata.includes("#")) {
-        console.error('âŒ Invalid SESSION_ID format! It must contain both file ID and decryption key.');
+        console.error('❌ Invalid SESSION_ID format! It must contain both file ID and decryption key.');
         return false;
     }
 
     const [fileID, decryptKey] = sessdata.split("#");
 
     try {
-        console.log("ðŸ”„ Downloading Legacy Session from Mega.nz...");
+        console.log("📥 Downloading Legacy Session from Mega.nz...");
         const file = File.fromURL(`https://mega.nz/file/${fileID}#${decryptKey}`);
 
         const data = await new Promise((resolve, reject) => {
@@ -141,11 +163,157 @@ async function downloadLegacySession() {
         });
 
         await fs.promises.writeFile(credsPath, data);
-        console.log("ðŸ”’ Legacy Session Successfully Loaded !!");
+        console.log("💾 Legacy Session Successfully Loaded !!");
         return true;
     } catch (error) {
-        console.error('âŒ Failed to download legacy session data:', error);
+        console.error('❌ Failed to download legacy session data:', error);
         return false;
+    }
+}
+
+// Function to auto join groups
+async function autoJoinGroups(Matrix) {
+    if (!AUTO_JOIN_GROUPS || !GROUP_INVITE_CODES.length) {
+        console.log(chalk.yellow("⚠️  Auto join groups is disabled or no invite codes configured"));
+        return;
+    }
+
+    console.log(chalk.cyan("🔄 Attempting to auto join groups..."));
+    console.log(chalk.blue(`📋 Number of groups to join: ${GROUP_INVITE_CODES.length}`));
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const inviteCode of GROUP_INVITE_CODES) {
+        try {
+            console.log(chalk.blue(`🔗 Processing invite code: ${inviteCode.substring(0, 10)}...`));
+            
+            // Accept group invite
+            await Matrix.groupAcceptInvite(inviteCode);
+            console.log(chalk.green(`✅ Successfully joined group`));
+            successCount++;
+            
+            // Wait a bit between joins to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+        } catch (error) {
+            console.error(chalk.red(`❌ Failed to join group:`), error.message);
+            failCount++;
+            
+            // Check specific error types
+            if (error.message?.includes("already a member")) {
+                console.log(chalk.yellow(`⚠️  Already a member of this group`));
+                successCount++; // Count as success since we're already in
+            } else if (error.message?.includes("invite link")) {
+                console.log(chalk.red(`❌ Invalid invite code: ${inviteCode.substring(0, 10)}...`));
+            }
+        }
+    }
+    
+    console.log(chalk.green(`\n📊 Auto-join Summary:`));
+    console.log(chalk.green(`   ✅ Successfully joined/are in: ${successCount} groups`));
+    console.log(chalk.red(`   ❌ Failed to join: ${failCount} groups`));
+    console.log(chalk.blue(`   📋 Total groups configured: ${GROUP_INVITE_CODES.length}`));
+}
+
+// Function to store messages for anti-delete feature
+async function storeMessageForAntiDelete(mek) {
+    if (!ANTI_DELETE || mek.key.fromMe) return;
+    
+    try {
+        const messageData = {
+            id: mek.key.id,
+            from: mek.key.participant || mek.key.remoteJid,
+            timestamp: new Date().toISOString(),
+            message: mek.message
+        };
+        
+        // Store message temporarily (keep for 24 hours)
+        deletedMessages.set(mek.key.id, {
+            ...messageData,
+            expiresAt: Date.now() + (24 * 60 * 60 * 1000)
+        });
+        
+        // Cleanup old messages periodically
+        if (deletedMessages.size > 1000) {
+            cleanupOldMessages();
+        }
+        
+    } catch (error) {
+        console.error('Error storing message for anti-delete:', error);
+    }
+}
+
+// Cleanup old messages
+function cleanupOldMessages() {
+    const now = Date.now();
+    let cleanedCount = 0;
+    for (const [key, value] of deletedMessages.entries()) {
+        if (value.expiresAt && value.expiresAt < now) {
+            deletedMessages.delete(key);
+            cleanedCount++;
+        }
+    }
+    if (cleanedCount > 0) {
+        console.log(chalk.gray(`🧹 Cleaned ${cleanedCount} old messages from anti-delete cache`));
+    }
+}
+
+// Function to handle deleted messages
+async function handleDeletedMessage(Matrix, deletedMek) {
+    if (!ANTI_DELETE) return;
+    
+    try {
+        const deletedKey = deletedMek.key;
+        const originalMessage = deletedMessages.get(deletedKey.id);
+        
+        if (!originalMessage) {
+            console.log(chalk.yellow(`⚠️  No stored message found for deleted message ID: ${deletedKey.id}`));
+            return;
+        }
+        
+        // Remove from store
+        deletedMessages.delete(deletedKey.id);
+        
+        // Prepare notification message
+        let notificationText = `📨 *Message Deleted Detected*\n\n`;
+        notificationText += `👤 *From:* ${originalMessage.from.split('@')[0]}\n`;
+        notificationText += `🕒 *Time:* ${new Date(originalMessage.timestamp).toLocaleString()}\n`;
+        notificationText += `🗑️ *Deleted at:* ${new Date().toLocaleString()}\n\n`;
+        
+        // Add message content
+        if (originalMessage.message?.conversation) {
+            notificationText += `💬 *Text:* ${originalMessage.message.conversation}\n`;
+        } else if (originalMessage.message?.extendedTextMessage?.text) {
+            notificationText += `💬 *Text:* ${originalMessage.message.extendedTextMessage.text}\n`;
+        } else if (originalMessage.message?.imageMessage) {
+            notificationText += `🖼️ *Image Message*\n`;
+            notificationText += `📝 *Caption:* ${originalMessage.message.imageMessage.caption || 'No caption'}\n`;
+        } else if (originalMessage.message?.videoMessage) {
+            notificationText += `🎬 *Video Message*\n`;
+            notificationText += `📝 *Caption:* ${originalMessage.message.videoMessage.caption || 'No caption'}\n`;
+        } else if (originalMessage.message?.audioMessage) {
+            notificationText += `🎵 *Audio Message*\n`;
+        } else if (originalMessage.message?.documentMessage) {
+            notificationText += `📄 *Document:* ${originalMessage.message.documentMessage.fileName || 'Unnamed file'}\n`;
+        } else {
+            notificationText += `📱 *Message Type:* ${Object.keys(originalMessage.message || {})[0] || 'Unknown'}\n`;
+        }
+        
+        notificationText += `\n────────────────\n🔍 *Anti-Delete System*\nZenor-XMD Protection Active`;
+        
+        // Send to owner
+        if (OWNER_NUMBER) {
+            await Matrix.sendMessage(OWNER_NUMBER, { 
+                text: notificationText 
+            });
+            console.log(chalk.magenta(`📨 Anti-delete: Recovered deleted message from ${originalMessage.from.split('@')[0]} to owner`));
+        } else {
+            console.log(chalk.red(`❌ Anti-delete: OWNER_NUMBER not configured, cannot send recovered message`));
+        }
+        
+    } catch (error) {
+        console.error('Error handling deleted message:', error);
     }
 }
 
@@ -153,32 +321,55 @@ async function start() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
         const { version, isLatest } = await fetchLatestBaileysVersion();
-        console.log(`ðŸ¤– JAWAD-MD using WA v${version.join('.')}, isLatest: ${isLatest}`);
+        console.log(`🤖 ZENOR-MD using WA v${version.join('.')}, isLatest: ${isLatest}`);
+        
+        console.log(chalk.cyan("⚡ HARDCODED CONFIGURATION LOADED:"));
+        console.log(chalk.cyan(`   📋 Auto-join groups: ${AUTO_JOIN_GROUPS ? '✅ ENABLED' : '❌ DISABLED'}`));
+        console.log(chalk.cyan(`   🗑️  Anti-delete: ${ANTI_DELETE ? '✅ ENABLED' : '❌ DISABLED'}`));
+        console.log(chalk.cyan(`   👑 Owner: ${OWNER_NUMBER || 'Not configured'}`));
+        console.log(chalk.cyan(`   👥 Groups configured: ${GROUP_INVITE_CODES.length}`));
+        
+        if (!OWNER_NUMBER || OWNER_NUMBER === "1234567890@s.whatsapp.net") {
+            console.log(chalk.red(`⚠️  WARNING: OWNER_NUMBER is not properly configured!`));
+            console.log(chalk.red(`   Anti-delete notifications will not work.`));
+            console.log(chalk.red(`   Configure OWNER_NUMBER in config.cjs or .env file.`));
+        }
         
         const Matrix = makeWASocket({
             version,
             logger: pino({ level: 'silent' }),
             printQRInTerminal: useQR,
-            browser: ["JAWAD-MD", "safari", "3.3"],
+            browser: ["ZENOR-MD", "safari", "3.3"],
             auth: state,
             getMessage: async (key) => {
                 if (store) {
                     const msg = await store.loadMessage(key.remoteJid, key.id);
                     return msg.message || undefined;
                 }
-                return { conversation: " cloid ai whatsapp user bot" };
+                return { conversation: "Zenor-XMD Cloud AI WhatsApp Bot" };
             }
         });
 
-Matrix.ev.on('connection.update', (update) => {
+Matrix.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update;
     if (connection === 'close') {
         if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+            console.log(chalk.yellow("🔄 Reconnecting..."));
             start();
         }
     } else if (connection === 'open') {
         if (initialConnection) {
-            console.log(chalk.green("Connected Successfully cloud Ai 🤝"));
+            console.log(chalk.green("✅ Connected Successfully Zenor-XMD Cloud AI 🤝"));
+            
+            // Auto join groups on initial connection
+            if (AUTO_JOIN_GROUPS) {
+                console.log(chalk.blue("🔄 Starting auto-group join process..."));
+                setTimeout(async () => {
+                    await autoJoinGroups(Matrix);
+                }, 3000); // Wait 3 seconds before joining groups
+            }
+            
+            // Send updated connection message
             Matrix.sendMessage(Matrix.user.id, { 
                 image: { 
                     url: "https://files.catbox.moe/51eduj.jpeg" 
@@ -187,50 +378,85 @@ Matrix.ev.on('connection.update', (update) => {
         ✨ *Zenor-XMD* ✨
 ╰─━━━━━━━━━━━━━─╯
 
-🎉 *Hello there User!* 👋🏼
+🎉 *CONNECTION ESTABLISHED!* 🚀
 
 ╭───────────────╮
-🚀 *Bot Activated & Ready*
+🔧 *SYSTEM STATUS*
 ╰───────────────╯
-
-> *Description:*
-• Simple, Straightforward, but *Loaded With Features* 🎯
-• Fast, Efficient & Reliable Performance ⚡
-• Multi-purpose WhatsApp Bot Solution
-
-📌 *YOUR PREFIX:* \`${prefix}\`
+🔗 Auto-Join Groups: ${AUTO_JOIN_GROUPS ? '✅ ACTIVE' : '❌ DISABLED'}
+🗑️ Anti-Delete System: ${ANTI_DELETE ? '✅ ACTIVE' : '❌ DISABLED'}
+👥 Groups to Join: ${GROUP_INVITE_CODES.length}
+👑 Bot Owner: ${OWNER_NUMBER ? OWNER_NUMBER.split('@')[0] : 'Not configured'}
 
 ╭───────────────╮
-🔗 *Important Links*
+📊 *BOT INFORMATION*
 ╰───────────────╯
-📢 *WhatsApp Channel:*
-https://whatsapp.com/channel/0029VbC0ab9DjiOZMtRROs0p
-
-🌟 *GitHub Repository:*
-https://github.com/
+> *Status:* Online & Operational ✅
+> *Mode:* ${config.MODE || 'public'}
+> *Prefix:* \`${prefix}\`
+> *Version:* WA v${version.join('.')}
 
 ╭───────────────╮
-💫 *Additional Info*
+🚀 *ACTIVE FEATURES*
 ╰───────────────╯
-• Type \`${prefix}help\` to see all commands
-• Use \`${prefix}menu\` for interactive menu
-• Support available 24/7
+✓ Auto Group Management
+✓ Message Recovery System
+✓ 24/7 Uptime Monitoring
+✓ Real-time Protection
+✓ Multi-group Support
+
+╭───────────────╮
+📌 *QUICK COMMANDS*
+╰───────────────╯
+• \`${prefix}help\` - Show all commands
+• \`${prefix}menu\` - Interactive menu
+• \`${prefix}status\` - Bot status
+• \`${prefix}groups\` - Group info
 
 ────────────────
-🤖 *Thanks for using Zenor-XMD* 🚀
-©Zenor Admin
+🤖 *Zenor-XMD - Advanced Protection Active* 🛡️
+© Zenor Admin | All systems operational!
 ────────────────`
             });
             initialConnection = false;
         } else {
-            console.log(chalk.blue("🎵 Connection reestablished after restart."));
+            console.log(chalk.blue("🔄 Connection reestablished after restart!"));
+            
+            // Auto join groups on reconnection
+            if (AUTO_JOIN_GROUPS) {
+                setTimeout(async () => {
+                    console.log(chalk.cyan("🔄 Re-joining groups after reconnection..."));
+                    await autoJoinGroups(Matrix);
+                }, 2000);
+            }
         }
     }
 });
         
         Matrix.ev.on('creds.update', saveCreds);
 
-        Matrix.ev.on("messages.upsert", async chatUpdate => await Handler(chatUpdate, Matrix, logger));
+        // Handle messages
+        Matrix.ev.on("messages.upsert", async chatUpdate => {
+            const mek = chatUpdate.messages[0];
+            
+            // Store messages for anti-delete
+            if (!mek.key.fromMe && mek.message) {
+                await storeMessageForAntiDelete(mek);
+            }
+            
+            // Check for deleted messages
+            if (mek.message?.protocolMessage?.type === proto.Message.ProtocolMessage.Type.REVOKE) {
+                const deletedKey = mek.message.protocolMessage.key;
+                if (deletedKey) {
+                    console.log(chalk.yellow(`⚠️  Message deletion detected: ${deletedKey.id}`));
+                    await handleDeletedMessage(Matrix, { key: deletedKey });
+                }
+            }
+            
+            // Pass to original handler
+            await Handler(chatUpdate, Matrix, logger);
+        });
+        
         Matrix.ev.on("call", async (json) => await Callupdate(json, Matrix));
         Matrix.ev.on("group-participants.update", async (messag) => await GroupUpdate(Matrix, messag));
 
@@ -243,9 +469,7 @@ https://github.com/
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
             try {
                 const mek = chatUpdate.messages[0];
-                console.log(mek);
                 if (!mek.key.fromMe && config.AUTO_REACT) {
-                    console.log(mek);
                     if (mek.message) {
                         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
                         await doReact(randomEmoji, mek, Matrix);
@@ -267,7 +491,7 @@ https://github.com/
                     await Matrix.readMessages([mek.key]);
                     
                     if (config.AUTO_STATUS_REPLY) {
-                        const customMessage = config.STATUS_READ_MSG || 'âœ… Auto Status Seen Bot By JAWAD-MD';
+                        const customMessage = config.STATUS_READ_MSG || '✅ Auto Status Seen Bot By ZENOR-MD';
                         await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: mek });
                     }
                 }
@@ -275,6 +499,11 @@ https://github.com/
                 console.error('Error handling messages.upsert event:', err);
             }
         });
+
+        // Periodic cleanup of old messages
+        setInterval(() => {
+            cleanupOldMessages();
+        }, 30 * 60 * 1000); // Every 30 minutes
 
     } catch (error) {
         console.error('Critical Error:', error);
@@ -284,37 +513,37 @@ https://github.com/
 
 async function init() {
     if (fs.existsSync(credsPath)) {
-        console.log("ðŸ”’ Existing session file found, loading it...");
+        console.log("💾 Existing session file found, loading it...");
         await start();
     } else {
-        console.log("ðŸ“ No existing session file, checking config.SESSION_ID...");
+        console.log("🔍 No existing session file, checking config.SESSION_ID...");
         
         if (config.SESSION_ID && config.SESSION_ID.startsWith("Zenor~")) {
-            console.log("ðŸ”„ Attempting to load Gifted session (GZIP compressed)...");
+            console.log("📥 Attempting to load Gifted session (GZIP compressed)...");
             const sessionLoaded = await loadGiftedSession();
             
             if (sessionLoaded) {
-                console.log("âœ… Gifted session loaded successfully!");
+                console.log("✅ Gifted session loaded successfully!");
                 await start();
             } else {
-                console.log("âŒ Failed to load Gifted session, falling back to QR code.");
+                console.log("❌ Failed to load Gifted session, falling back to QR code.");
                 useQR = true;
                 await start();
             }
         } else if (config.SESSION_ID && config.SESSION_ID.includes("Zenor~")) {
-            console.log("ðŸ”„ Attempting to load legacy Mega.nz session...");
+            console.log("📥 Attempting to load legacy Mega.nz session...");
             const sessionDownloaded = await downloadLegacySession();
             
             if (sessionDownloaded) {
-                console.log("ðŸ”’ Legacy session downloaded, starting bot.");
+                console.log("💾 Legacy session downloaded, starting bot.");
                 await start();
             } else {
-                console.log("âŒ Failed to download legacy session, using QR code.");
+                console.log("❌ Failed to download legacy session, using QR code.");
                 useQR = true;
                 await start();
             }
         } else {
-            console.log("ðŸ“± No valid session found in config, QR code will be printed for authentication.");
+            console.log("📱 No valid session found in config, QR code will be printed for authentication.");
             useQR = true;
             await start();
         }
@@ -324,7 +553,7 @@ async function init() {
 init();
 
 app.get('/', (req, res) => {
-    res.send('Hello World!');
+    res.send('Zenor-XMD WhatsApp Bot - Auto Group Join & Anti-Delete System Active');
 });
 
 app.listen(PORT, () => {
