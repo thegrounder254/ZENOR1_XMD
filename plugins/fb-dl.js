@@ -15,7 +15,7 @@ const facebook = async (m, Matrix) => {
   try {
     await Matrix.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
-    const { data } = await axios.get(`https://api.davidcyriltech.my.id/facebook2?url=${query}`);
+    const { data } = await axios.get(`https://api.giftedtech.co.ke/api/download/facebook?apikey=gifted&url=https%3A%2F%2Fwww.facebook.com%2Freel%2F402579285704851%3Fmibextid%3DrS40aB7S9Ucbxw6v${query}`);
 
     if (!data.status || !data.video || !data.video.downloads) {
       return Matrix.sendMessage(m.from, { text: "⚠️ *Failed to fetch Facebook video. Please try again.*" }, { quoted: m });
