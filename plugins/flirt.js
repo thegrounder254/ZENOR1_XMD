@@ -9,9 +9,9 @@ const text = m.body.slice(prefix.length + cmd.length).trim();
 
   if (validCommands.includes(cmd)) {
     try {
-      const apiKey = 'shizo';
+      const apiKey = 'gifted';
 
-      const response = await nodeFetch(`https://shizoapi.onrender.com/api/texts/flirt?apikey=${apiKey}`);
+      const response = await nodeFetch(`https://api.giftedtech.co.ke/api/fun/flirt?apikey=gifted${apiKey}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch flirt message: ${await response.text()}`);
       }
